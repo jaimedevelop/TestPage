@@ -1,3 +1,25 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+.custom-popup .mapboxgl-popup-content {
+  padding: 0 !important;
+  background: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.custom-popup .mapboxgl-popup-close-button {
+  padding: 4px 8px !important;
+  right: 0 !important;
+  top: 0 !important;
+  color: white !important;
+  z-index: 1 !important;
+  font-size: 16px !important;
+  background: none !important;
+  border: none !important;
+}
+
+.custom-popup .mapboxgl-popup-close-button:hover {
+  background: rgba(0,0,0,0.1) !important;
+}

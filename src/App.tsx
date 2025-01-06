@@ -1,4 +1,4 @@
-import SkiMap from './components/Map';
+import SkiMap from './components/SkiMap';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
 function App() {
