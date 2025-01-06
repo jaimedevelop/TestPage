@@ -2,7 +2,7 @@ import { initializeApp } from 'firebase/app';
 import { getDatabase } from 'firebase/database';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAdqTa5ScOEyMtiVtwNyDkiIQSop0e9ZlY",
+  apiKey: "",
   authDomain: "sb-alpine-tours.firebaseapp.com",
   databaseURL: "https://sb-alpine-tours-default-rtdb.firebaseio.com",
   projectId: "sb-alpine-tours",
