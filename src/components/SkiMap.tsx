@@ -1,24 +1,20 @@
 import { useEffect, useState } from 'react';
-import Map, { Marker, Popup } from 'react-map-gl';
+import Map, { Marker } from 'react-map-gl';
 import { database } from '../firebase';
 import { ref, onValue } from 'firebase/database';
 import { SkiResort } from '../types';
 import { MapPin, X } from 'lucide-react';
 import ResortPopup from './ResortPopup';
+import PriceFilter from './filters/PriceFilter';
+import DifficultyFilter from './filters/DifficultyFilter';
+import RegionFilter from './filters/RegionFilter';
+import DistanceFilter from './filters/DistanceFilter';
+import AmenitiesFilter from './filters/AmenitiesFilter';
+import CityFilter from './filters/CityFilter';
 
 const MAPBOX_TOKEN = 'pk.eyJ1Ijoiam9hcXVpbmdmMjEiLCJhIjoiY2x1dnZ1ZGFrMDduZTJrbWp6bHExbzNsYiJ9.ZOEuIV9R0ks2I5bYq40HZQ';
 
 type FilterType = 'price' | 'difficulty' | 'region' | 'distance' | 'amenities' | 'city' | null;
-
-const DIFFICULTIES = ['Green', 'Blue', 'Double Blue', 'Black', 'Double Black'];
-const REGIONS = {
-  East: ['Maine', 'Vermont', 'New Hampshire', 'New York', 'Pennsylvania'],
-  West: ['California', 'Oregon', 'Washington'],
-  Central: ['Michigan', 'Wisconsin', 'Minnesota'],
-  Rocky: ['Colorado', 'Utah', 'Wyoming', 'Montana', 'Idaho']
-};
-const CITY_SIZES = ['Small', 'Medium', 'Large'];
-const AMENITIES = ['Night Skiing', 'Terrain Park', 'Backcountry Access', 'Snow Tubing', 'Ice Skating'];
 
 export default function SkiMap() {
   const [resorts, setResorts] = useState<SkiResort[]>([]);
@@ -48,181 +44,31 @@ export default function SkiMap() {
   const renderFilterPanel = () => {
     switch (activeFilter) {
       case 'price':
-        return (
-          <div className="p-6 space-y-4">
-            <h3 className="text-lg font-semibold">Price Range</h3>
-            <div className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Minimum Price: ${priceRange[0]}</label>
-                <input
-                  type="range"
-                  min="0"
-                  max="200"
-                  value={priceRange[0]}
-                  onChange={(e) => setPriceRange([Number(e.target.value), priceRange[1]])}
-                  className="w-full"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Maximum Price: ${priceRange[1]}</label>
-                <input
-                  type="range"
-                  min="0"
-                  max="200"
-                  value={priceRange[1]}
-                  onChange={(e) => setPriceRange([priceRange[0], Number(e.target.value)])}
-                  className="w-full"
-                />
-              </div>
-            </div>
-          </div>
-        );
-      
+        return <PriceFilter priceRange={priceRange} setPriceRange={setPriceRange} />;
       case 'difficulty':
-        return (
-          <div className="p-6">
-            <h3 className="text-lg font-semibold mb-4">Difficulty Levels</h3>
-            <div className="space-y-2">
-              {DIFFICULTIES.map((difficulty) => (
-                <label key={difficulty} className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    checked={selectedDifficulties.includes(difficulty)}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setSelectedDifficulties([...selectedDifficulties, difficulty]);
-                      } else {
-                        setSelectedDifficulties(selectedDifficulties.filter(d => d !== difficulty));
-                      }
-                    }}
-                    className="rounded"
-                  />
-                  <span>{difficulty}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-        );
-      
+        return <DifficultyFilter selectedDifficulties={selectedDifficulties} setSelectedDifficulties={setSelectedDifficulties} />;
       case 'region':
         return (
-          <div className="p-6">
-            <h3 className="text-lg font-semibold mb-4">Region Selection</h3>
-            <select
-              value={selectedRegion}
-              onChange={(e) => {
-                setSelectedRegion(e.target.value);
-                setSelectedStates([]);
-              }}
-              className="w-full p-2 mb-4 border rounded"
-            >
-              <option value="">Select Region</option>
-              {Object.keys(REGIONS).map((region) => (
-                <option key={region} value={region}>{region}</option>
-              ))}
-            </select>
-            
-            {selectedRegion && (
-              <div className="space-y-2">
-                <h4 className="font-medium mb-2">States</h4>
-                {REGIONS[selectedRegion as keyof typeof REGIONS].map((state) => (
-                  <label key={state} className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      checked={selectedStates.includes(state)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedStates([...selectedStates, state]);
-                        } else {
-                          setSelectedStates(selectedStates.filter(s => s !== state));
-                        }
-                      }}
-                      className="rounded"
-                    />
-                    <span>{state}</span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
+          <RegionFilter 
+            selectedRegion={selectedRegion}
+            setSelectedRegion={setSelectedRegion}
+            selectedStates={selectedStates}
+            setSelectedStates={setSelectedStates}
+          />
         );
-      
       case 'distance':
         return (
-          <div className="p-6 space-y-4">
-            <h3 className="text-lg font-semibold">Distance Filter</h3>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Your Location</label>
-              <input
-                type="text"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                placeholder="Enter city or zip code"
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Maximum Distance: {maxDistance} miles</label>
-              <input
-                type="range"
-                min="0"
-                max="500"
-                value={maxDistance}
-                onChange={(e) => setMaxDistance(Number(e.target.value))}
-                className="w-full"
-              />
-            </div>
-          </div>
+          <DistanceFilter
+            location={location}
+            setLocation={setLocation}
+            maxDistance={maxDistance}
+            setMaxDistance={setMaxDistance}
+          />
         );
-      
       case 'amenities':
-        return (
-          <div className="p-6">
-            <h3 className="text-lg font-semibold mb-4">Amenities</h3>
-            <div className="space-y-2">
-              {AMENITIES.map((amenity) => (
-                <label key={amenity} className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    checked={selectedAmenities.includes(amenity)}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setSelectedAmenities([...selectedAmenities, amenity]);
-                      } else {
-                        setSelectedAmenities(selectedAmenities.filter(a => a !== amenity));
-                      }
-                    }}
-                    className="rounded"
-                  />
-                  <span>{amenity}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-        );
-      
+        return <AmenitiesFilter selectedAmenities={selectedAmenities} setSelectedAmenities={setSelectedAmenities} />;
       case 'city':
-        return (
-          <div className="p-6">
-            <h3 className="text-lg font-semibold mb-4">City Size</h3>
-            <div className="space-y-2">
-              {CITY_SIZES.map((size) => (
-                <label key={size} className="flex items-center space-x-2">
-                  <input
-                    type="radio"
-                    name="citySize"
-                    value={size}
-                    checked={selectedCitySize === size}
-                    onChange={(e) => setSelectedCitySize(e.target.value)}
-                    className="rounded"
-                  />
-                  <span>{size}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-        );
-      
+        return <CityFilter selectedCitySize={selectedCitySize} setSelectedCitySize={setSelectedCitySize} />;
       default:
         return null;
     }
@@ -342,4 +188,3 @@ export default function SkiMap() {
       </Map>
     </div>
   );
-}
