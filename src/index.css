@@ -7,19 +7,34 @@
   background: none !important;
   border-radius: 0 !important;
   box-shadow: none !important;
+  position: relative !important; /* Added position relative */
 }
 
 .custom-popup .mapboxgl-popup-close-button {
+  position: absolute !important;
   padding: 4px 8px !important;
-  right: 0 !important;
+  right: -54px !important; /* Adjusted right position */
   top: 0 !important;
   color: white !important;
-  z-index: 1 !important;
+  z-index: 10 !important;
   font-size: 16px !important;
   background: none !important;
   border: none !important;
+  cursor: pointer !important;
+  transform: translateX(100%) !important; /* Added transform to shift it right */
 }
 
 .custom-popup .mapboxgl-popup-close-button:hover {
   background: rgba(0,0,0,0.1) !important;
 }
+
+  /* Hide scrollbar for Chrome, Safari and Opera */
+  .no-scrollbar::-webkit-scrollbar {
+      display: none;
+  }
+
+  /* Hide scrollbar for IE, Edge and Firefox */
+  .no-scrollbar {
+      -ms-overflow-style: none;  /* IE and Edge */
+      scrollbar-width: none;  /* Firefox */
+  }
