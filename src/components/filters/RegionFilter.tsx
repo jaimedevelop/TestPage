@@ -1,64 +1,45 @@
 import React from 'react';
 
-const REGIONS = {
-  East: ['Maine', 'Vermont', 'New Hampshire', 'New York', 'Pennsylvania'],
-  West: ['California', 'Oregon', 'Washington'],
-  Central: ['Michigan', 'Wisconsin', 'Minnesota'],
-  Rocky: ['Colorado', 'Utah', 'Wyoming', 'Montana', 'Idaho']
-} as const;
+const REGIONS = ['East', 'West', 'Central', 'Rocky'] as const;
 
 interface RegionFilterProps {
   selectedRegion: string;
   setSelectedRegion: (region: string) => void;
   selectedStates: string[];
   setSelectedStates: (states: string[]) => void;
+  onRegionHover: (region: string) => void;
 }
 
 export default function RegionFilter({ 
   selectedRegion, 
-  setSelectedRegion, 
-  selectedStates, 
-  setSelectedStates 
+  setSelectedRegion,
+  selectedStates,
+  setSelectedStates,
+  onRegionHover
 }: RegionFilterProps) {
   return (
     <div className="p-6">
       <h3 className="text-lg font-semibold mb-4">Region Selection</h3>
-      <select
-        value={selectedRegion}
-        onChange={(e) => {
-          setSelectedRegion(e.target.value);
-          setSelectedStates([]);
-        }}
-        className="w-full p-2 mb-4 border rounded"
-      >
-        <option value="">Select Region</option>
-        {Object.keys(REGIONS).map((region) => (
-          <option key={region} value={region}>{region}</option>
+      <div className="grid grid-cols-2 gap-4">
+        {REGIONS.map((region) => (
+          <button
+            key={region}
+            onClick={() => {
+              setSelectedRegion(selectedRegion === region ? '' : region);
+              setSelectedStates([]);
+            }}
+            onMouseEnter={() => onRegionHover(region)}
+            onMouseLeave={() => onRegionHover('')}
+            className={`p-4 rounded-lg transition-all duration-200 ${
+              selectedRegion === region
+                ? 'bg-blue-500 text-white shadow-lg scale-105'
+                : 'bg-gray-100 hover:bg-gray-200'
+            }`}
+          >
+            {region}
+          </button>
         ))}
-      </select>
-      
-      {selectedRegion && (
-        <div className="space-y-2">
-          <h4 className="font-medium mb-2">States</h4>
-          {REGIONS[selectedRegion as keyof typeof REGIONS].map((state) => (
-            <label key={state} className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                checked={selectedStates.includes(state)}
-                onChange={(e) => {
-                  if (e.target.checked) {
-                    setSelectedStates([...selectedStates, state]);
-                  } else {
-                    setSelectedStates(selectedStates.filter(s => s !== state));
-                  }
-                }}
-                className="rounded"
-              />
-              <span>{state}</span>
-            </label>
-          ))}
-        </div>
-      )}
+      </div>
     </div>
   );
 }
