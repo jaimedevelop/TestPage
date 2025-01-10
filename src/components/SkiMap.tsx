@@ -1,5 +1,5 @@
-import { useEffect, useState, useMemo, useRef} from 'react';
-import Map, { Marker} from 'react-map-gl';
+import { useEffect, useState, useMemo, useRef } from 'react';
+import Map, { Marker } from 'react-map-gl';
 import { database } from '../firebase';
 import { ref, onValue } from 'firebase/database';
 import { SkiResort } from '../types';
@@ -11,23 +11,25 @@ import RegionFilter from './filters/RegionFilter';
 import DistanceFilter from './filters/DistanceFilter';
 import AmenitiesFilter from './filters/AmenitiesFilter';
 import CityFilter from './filters/CityFilter';
+import mapboxgl from 'mapbox-gl';
+import statesData from '../data/states.geojson?url';
 
 const MAPBOX_TOKEN = 'pk.eyJ1Ijoiam9hcXVpbmdmMjEiLCJhIjoiY2x1dnZ1ZGFrMDduZTJrbWp6bHExbzNsYiJ9.ZOEuIV9R0ks2I5bYq40HZQ';
 
-const EASTERN_STATES = [
-  'Louisiana', 'Arkansas', 'Mississippi', 'Georgia', 'Alabama', 'Florida',
-  'Tennessee', 'North Carolina', 'South Carolina', 'Virginia', 'West Virginia',
-  'Pennsylvania', 'New York', 'District of Columbia', 'Maryland', 'Delaware',
-  'New Jersey', 'Connecticut', 'Rhode Island', 'Massachusetts', 'Vermont',
-  'New Hampshire', 'Maine'
-];
-
 type FilterType = 'price' | 'difficulty' | 'region' | 'distance' | 'amenities' | 'city' | null;
+
+const REGION_COLORS = {
+  East: '#4264fb',
+  West: '#D7961F',
+  Rocky: '#fb4242',
+  Central: '#003E1F'
+};
 
 export default function SkiMap() {
   const [resorts, setResorts] = useState<SkiResort[]>([]);
   const [selectedResort, setSelectedResort] = useState<SkiResort | null>(null);
   const [activeFilter, setActiveFilter] = useState<FilterType>(null);
+  const [hoveredRegion, setHoveredRegion] = useState<string>('');
   const mapRef = useRef<mapboxgl.Map | null>(null);
   
   // Filter states
@@ -50,12 +52,41 @@ export default function SkiMap() {
     });
   }, []);
 
+  // Update map highlighting when region changes or hover state changes
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const activeRegion = hoveredRegion || selectedRegion;
+
+    // Update the fill layer
+    if (map.getLayer('region-states-fill')) {
+      map.setPaintProperty('region-states-fill', 'fill-opacity', [
+        'case',
+        ['==', ['get', 'REGION'], activeRegion],
+        0.2,
+        0
+      ]);
+    }
+
+    // Update the outline layer
+    if (map.getLayer('region-states-outline')) {
+      map.setPaintProperty('region-states-outline', 'line-width', [
+        'case',
+        ['==', ['get', 'REGION'], activeRegion],
+        1,
+        0
+      ]);
+    }
+  }, [selectedRegion, hoveredRegion]);
+
+  // Cleanup map layers on unmount
   useEffect(() => {
     return () => {
       const map = mapRef.current;
       if (map) {
-        if (map.getLayer('eastern-states-outline')) map.removeLayer('eastern-states-outline');
-        if (map.getLayer('eastern-states-fill')) map.removeLayer('eastern-states-fill');
+        if (map.getLayer('region-states-outline')) map.removeLayer('region-states-outline');
+        if (map.getLayer('region-states-fill')) map.removeLayer('region-states-fill');
         if (map.getSource('states')) map.removeSource('states');
       }
     };
@@ -64,6 +95,11 @@ export default function SkiMap() {
   // Filter resorts based on all active filters
   const filteredResorts = useMemo(() => {
     return resorts.filter(resort => {
+      // Region Filter
+      if (selectedRegion && resort.region !== selectedRegion) {
+        return false;
+      }
+
       // Price Filter
       const fullDayPrice = parseFloat(resort.fullDayTicket.replace(/[^0-9.]/g, ''));
       if (isNaN(fullDayPrice) || fullDayPrice < priceRange[0] || fullDayPrice > priceRange[1]) {
@@ -80,20 +116,14 @@ export default function SkiMap() {
           'Double Black': resort.doubleBlack
         };
         
-        // Check if any selected difficulty is a majority
         const hasSelectedDifficulty = selectedDifficulties.some(difficulty => {
           const percentage = parseFloat(difficultyMap[difficulty].replace('%', ''));
-          return !isNaN(percentage) && percentage >= 30; // Consider it significant if 30% or more
+          return !isNaN(percentage) && percentage >= 30;
         });
         
         if (!hasSelectedDifficulty) {
           return false;
         }
-      }
-
-      // Region Filter
-      if (selectedRegion && resort.region !== selectedRegion) {
-        return false;
       }
 
       // Amenities Filter
@@ -132,6 +162,7 @@ export default function SkiMap() {
             setSelectedRegion={setSelectedRegion}
             selectedStates={selectedStates}
             setSelectedStates={setSelectedStates}
+            onRegionHover={setHoveredRegion}
           />
         );
       case 'distance':
@@ -240,7 +271,71 @@ export default function SkiMap() {
         style={{ width: '100%', height: '100%' }}
         mapStyle="mapbox://styles/mapbox/outdoors-v12"
         mapboxAccessToken={MAPBOX_TOKEN}
-        
+        onLoad={async (event: { target: mapboxgl.Map }) => {
+          const map = event.target;
+          mapRef.current = map;
+
+          try {
+            if (!map.getSource('states')) {
+              const response = await fetch(statesData);
+              const geoJsonData = await response.json();
+
+              map.addSource('states', {
+                type: 'geojson',
+                data: geoJsonData
+              });
+
+              // Add fill layer below the marker layer
+              map.addLayer({
+                id: 'region-states-fill',
+                type: 'fill',
+                source: 'states',
+                paint: {
+                  'fill-color': [
+                    'match',
+                    ['get', 'REGION'],
+                    'East', REGION_COLORS.East,
+                    'West', REGION_COLORS.West,
+                    'Rocky', REGION_COLORS.Rocky,
+                    'Central', REGION_COLORS.Central,
+                    '#000000'
+                  ],
+                  'fill-opacity': [
+                    'case',
+                    ['==', ['get', 'REGION'], hoveredRegion || selectedRegion],
+                    0.2,
+                    0
+                  ]
+                }
+              }, 'poi-label'); // Insert the layer below labels to keep markers visible
+
+              map.addLayer({
+                id: 'region-states-outline',
+                type: 'line',
+                source: 'states',
+                paint: {
+                  'line-color': [
+                    'match',
+                    ['get', 'REGION'],
+                    'East', REGION_COLORS.East,
+                    'West', REGION_COLORS.West,
+                    'Rocky', REGION_COLORS.Rocky,
+                    'Central', REGION_COLORS.Central,
+                    '#000000'
+                  ],
+                  'line-width': [
+                    'case',
+                    ['==', ['get', 'REGION'], hoveredRegion || selectedRegion],
+                    1,
+                    0
+                  ]
+                }
+              }, 'poi-label'); // Insert the layer below labels to keep markers visible
+            }
+          } catch (error) {
+            console.error('Error loading GeoJSON:', error);
+          }
+        }}
       >
         {filteredResorts.map((resort, index) => (
           resort.latitude && resort.longitude ? (
