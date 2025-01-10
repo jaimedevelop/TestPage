@@ -188,3 +188,4 @@ export default function SkiMap() {
       </Map>
     </div>
   );
+}
