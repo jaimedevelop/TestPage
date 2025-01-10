@@ -47,7 +47,7 @@ const difficultyLevels = [
       closeButton={true}
       closeOnClick={true}
       offset={16}
-      className="custom-popup"
+      className="custom-popup transition-all duration-300 ease-in-out"
     >
       <div className="rounded-lg shadow-lg overflow-hidden w-80">
         {/* Top Row - Resort Name */}

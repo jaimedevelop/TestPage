@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import Map, { Marker } from 'react-map-gl';
+import { useEffect, useState, useMemo, useRef} from 'react';
+import Map, { Marker} from 'react-map-gl';
 import { database } from '../firebase';
 import { ref, onValue } from 'firebase/database';
 import { SkiResort } from '../types';
@@ -14,12 +14,21 @@ import CityFilter from './filters/CityFilter';
 
 const MAPBOX_TOKEN = 'pk.eyJ1Ijoiam9hcXVpbmdmMjEiLCJhIjoiY2x1dnZ1ZGFrMDduZTJrbWp6bHExbzNsYiJ9.ZOEuIV9R0ks2I5bYq40HZQ';
 
+const EASTERN_STATES = [
+  'Louisiana', 'Arkansas', 'Mississippi', 'Georgia', 'Alabama', 'Florida',
+  'Tennessee', 'North Carolina', 'South Carolina', 'Virginia', 'West Virginia',
+  'Pennsylvania', 'New York', 'District of Columbia', 'Maryland', 'Delaware',
+  'New Jersey', 'Connecticut', 'Rhode Island', 'Massachusetts', 'Vermont',
+  'New Hampshire', 'Maine'
+];
+
 type FilterType = 'price' | 'difficulty' | 'region' | 'distance' | 'amenities' | 'city' | null;
 
 export default function SkiMap() {
   const [resorts, setResorts] = useState<SkiResort[]>([]);
   const [selectedResort, setSelectedResort] = useState<SkiResort | null>(null);
   const [activeFilter, setActiveFilter] = useState<FilterType>(null);
+  const mapRef = useRef<mapboxgl.Map | null>(null);
   
   // Filter states
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 200]);
@@ -40,6 +49,75 @@ export default function SkiMap() {
       }
     });
   }, []);
+
+  useEffect(() => {
+    return () => {
+      const map = mapRef.current;
+      if (map) {
+        if (map.getLayer('eastern-states-outline')) map.removeLayer('eastern-states-outline');
+        if (map.getLayer('eastern-states-fill')) map.removeLayer('eastern-states-fill');
+        if (map.getSource('states')) map.removeSource('states');
+      }
+    };
+  }, []);
+
+  // Filter resorts based on all active filters
+  const filteredResorts = useMemo(() => {
+    return resorts.filter(resort => {
+      // Price Filter
+      const fullDayPrice = parseFloat(resort.fullDayTicket.replace(/[^0-9.]/g, ''));
+      if (isNaN(fullDayPrice) || fullDayPrice < priceRange[0] || fullDayPrice > priceRange[1]) {
+        return false;
+      }
+
+      // Difficulty Filter
+      if (selectedDifficulties.length > 0) {
+        const difficultyMap: { [key: string]: string } = {
+          'Green': resort.green,
+          'Blue': resort.blue,
+          'Double Blue': resort.doubleBlue,
+          'Black': resort.black,
+          'Double Black': resort.doubleBlack
+        };
+        
+        // Check if any selected difficulty is a majority
+        const hasSelectedDifficulty = selectedDifficulties.some(difficulty => {
+          const percentage = parseFloat(difficultyMap[difficulty].replace('%', ''));
+          return !isNaN(percentage) && percentage >= 30; // Consider it significant if 30% or more
+        });
+        
+        if (!hasSelectedDifficulty) {
+          return false;
+        }
+      }
+
+      // Region Filter
+      if (selectedRegion && resort.region !== selectedRegion) {
+        return false;
+      }
+
+      // Amenities Filter
+      if (selectedAmenities.length > 0) {
+        const amenityMap: { [key: string]: boolean | null } = {
+          'Night Skiing': resort.nightSkiing,
+          'Terrain Park': resort.terrainPark === 'Yes',
+          'Backcountry Access': resort.backcountry,
+          'Snow Tubing': resort.snowTubing,
+          'Ice Skating': resort.iceSkating
+        };
+
+        const hasAllSelectedAmenities = selectedAmenities.every(
+          amenity => amenityMap[amenity]
+        );
+
+        if (!hasAllSelectedAmenities) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [resorts, priceRange, selectedDifficulties, selectedRegion, selectedAmenities]);
 
   const renderFilterPanel = () => {
     switch (activeFilter) {
@@ -139,7 +217,7 @@ export default function SkiMap() {
       </div>
       
       {/* Filter Panel */}
-      <div className={`absolute bottom-0 left-0 right-0 bg-white rounded-t-xl shadow-lg transform transition-transform duration-300 ease-in-out z-20 ${activeFilter ? 'translate-y-0' : 'translate-y-full'}`} style={{ height: '60vh' }}>
+      <div className={`absolute bottom-0 left-0 right-0 bg-white rounded-t-xl shadow-lg transform transition-transform duration-300 ease-in-out z-20 ${activeFilter ? 'translate-y-0' : 'translate-y-full'}`} style={{ height: '50vh' }}>
         <div className="flex justify-between items-center p-4 border-b">
           <h2 className="text-xl font-semibold">
             {activeFilter ? activeFilter.charAt(0).toUpperCase() + activeFilter.slice(1) : ''} Filter
@@ -148,7 +226,7 @@ export default function SkiMap() {
             <X className="w-6 h-6" />
           </button>
         </div>
-        <div className="overflow-y-auto" style={{ maxHeight: 'calc(60vh - 4rem)' }}>
+        <div className="overflow-y-auto" style={{ maxHeight: 'calc(50vh - 4rem)' }}>
           {renderFilterPanel()}
         </div>
       </div>
@@ -162,8 +240,9 @@ export default function SkiMap() {
         style={{ width: '100%', height: '100%' }}
         mapStyle="mapbox://styles/mapbox/outdoors-v12"
         mapboxAccessToken={MAPBOX_TOKEN}
+        
       >
-        {resorts.map((resort, index) => (
+        {filteredResorts.map((resort, index) => (
           resort.latitude && resort.longitude ? (
             <Marker
               key={index}
@@ -188,3 +267,4 @@ export default function SkiMap() {
       </Map>
     </div>
   );
+}
