@@ -6,22 +6,24 @@ interface DistanceFilterProps {
   setLocation: (location: string) => void;
   maxDistance: number;
   setMaxDistance: (distance: number) => void;
+  setSelectedCoordinates: (coords: [number, number] | null) => void;
 }
 
 export default function DistanceFilter({
   location,
   setLocation,
   maxDistance,
-  setMaxDistance
+  setMaxDistance,
+  setSelectedCoordinates
 }: DistanceFilterProps) {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const { query, setQuery, suggestions, loading, error } = useMapboxGeocoding(location);
-  const suggestionRef = useRef(null);
+  const suggestionRef = useRef<HTMLDivElement>(null);
 
   // Handle clicking outside suggestions
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (suggestionRef.current && !suggestionRef.current.contains(event.target)) {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (suggestionRef.current && !suggestionRef.current.contains(event.target as Node)) {
         setShowSuggestions(false);
       }
     };
@@ -30,9 +32,10 @@ export default function DistanceFilter({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleSuggestionClick = (suggestion) => {
+  const handleSuggestionClick = (suggestion: any) => {
     setLocation(suggestion.place_name);
     setQuery(suggestion.place_name);
+    setSelectedCoordinates(suggestion.center);
     setShowSuggestions(false);
   };
 
@@ -47,6 +50,9 @@ export default function DistanceFilter({
           onChange={(e) => {
             setQuery(e.target.value);
             setShowSuggestions(true);
+            if (!e.target.value) {
+              setSelectedCoordinates(null);
+            }
           }}
           onFocus={() => setShowSuggestions(true)}
           placeholder="Enter city or zip code"
@@ -62,12 +68,16 @@ export default function DistanceFilter({
 
         {/* Error message */}
         {error && (
-          <p className="mt-1 text-sm text-red-600">{error}</p>
+          <p className="mt-1 text-sm text-red-600">
+            {error === 'Failed to fetch suggestions' 
+              ? 'Unable to find locations. Please try again.' 
+              : error}
+          </p>
         )}
 
         {/* Suggestions dropdown */}
         {showSuggestions && suggestions.length > 0 && (
-          <div className="absolute z-10 mt-1 w-full bg-white rounded-md shadow-lg border border-gray-200">
+          <div className="absolute z-10 mt-1 w-full bg-white rounded-md shadow-lg border border-gray-200 max-h-60 overflow-auto">
             {suggestions.map((suggestion) => (
               <button
                 key={suggestion.id}

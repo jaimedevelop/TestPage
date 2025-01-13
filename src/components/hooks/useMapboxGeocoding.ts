@@ -3,8 +3,12 @@ import { useState, useEffect, useRef } from 'react';
 interface MapboxFeature {
   id: string;
   place_name: string;
+  center: [number, number];
   // Add other properties as needed
 }
+
+// Use the same token from your SkiMap component
+const MAPBOX_TOKEN = 'pk.eyJ1Ijoiam9hcXVpbmdmMjEiLCJhIjoiY2x1dnZ1ZGFrMDduZTJrbWp6bHExbzNsYiJ9.ZOEuIV9R0ks2I5bYq40HZQ';
 
 export const useMapboxGeocoding = (initialValue = '') => {
   const [query, setQuery] = useState(initialValue);
@@ -26,17 +30,21 @@ export const useMapboxGeocoding = (initialValue = '') => {
       
       const response = await fetch(
         `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(searchQuery)}.json?` +
-        `access_token=${import.meta.env.VITE_MAPBOX_TOKEN}&` +  // Changed this line
+        `access_token=${MAPBOX_TOKEN}&` +
         'types=place,postcode,address&' +
-        'limit=5'
+        'limit=5&' +
+        'country=us'  // Limit to US locations
       );
 
-      if (!response.ok) throw new Error('Failed to fetch suggestions');
+      if (!response.ok) {
+        throw new Error(`Failed to fetch suggestions: ${response.statusText}`);
+      }
 
       const data = await response.json();
-      setSuggestions(data.features);
+      setSuggestions(data.features || []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      console.error('Geocoding error:', err);
+      setError(err instanceof Error ? err.message : 'An error occurred while fetching suggestions');
       setSuggestions([]);
     } finally {
       setLoading(false);
@@ -59,5 +67,11 @@ export const useMapboxGeocoding = (initialValue = '') => {
     };
   }, [query]);
 
-  return { query, setQuery, suggestions, loading, error };
+  return { 
+    query, 
+    setQuery, 
+    suggestions, 
+    loading, 
+    error 
+  };
 };
