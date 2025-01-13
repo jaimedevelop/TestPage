@@ -12,7 +12,7 @@ import DistanceFilter from './filters/DistanceFilter';
 import AmenitiesFilter from './filters/AmenitiesFilter';
 import CityFilter from './filters/CityFilter';
 import mapboxgl from 'mapbox-gl';
-import 'mapbox-gl/dist/mapbox-gl.css'; //JUST ADDED THIS
+import 'mapbox-gl/dist/mapbox-gl.css';
 import statesData from '../data/states.geojson?url';
 
 const MAPBOX_TOKEN = 'pk.eyJ1Ijoiam9hcXVpbmdmMjEiLCJhIjoiY2x1dnZ1ZGFrMDduZTJrbWp6bHExbzNsYiJ9.ZOEuIV9R0ks2I5bYq40HZQ';
@@ -26,6 +26,51 @@ const REGION_COLORS = {
   Central: '#003E1F'
 };
 
+// Region boundaries and view settings
+const REGION_COORDINATES = {
+  East: { 
+    center: [-78.5, 42], // Centered around Pennsylvania/New York area
+    zoom: 4,
+    bounds: {
+      north: 47.5, // Maine
+      south: 35,   // Georgia
+      east: -67,   // Maine coast
+      west: -85    // Western boundary around Ohio/Kentucky
+    }
+  },
+  West: { 
+    center: [-120, 43], // Centered around Oregon
+    zoom: 4,
+    bounds: {
+      north: 49,    // Washington border
+      south: 32,    // Southern California
+      east: -110,   // Eastern boundary
+      west: -125    // Pacific coast
+    }
+  },
+  Rocky: { 
+    center: [-109, 43], // Centered around Wyoming
+    zoom: 4,
+    bounds: {
+      north: 49,    // Montana border
+      south: 31,    // Southern New Mexico
+      east: -103,   // Eastern Colorado
+      west: -115    // Western Idaho
+    }
+  },
+  Central: { 
+    center: [-92, 42], // Centered around Iowa/Wisconsin
+    zoom: 4,
+    bounds: {
+      north: 49,    // Minnesota border
+      south: 29,    // Gulf coast
+      east: -85,    // Eastern boundary
+      west: -103    // Western boundary
+    }
+  }
+};
+
+
 export default function SkiMap() {
   const [resorts, setResorts] = useState<SkiResort[]>([]);
   const [selectedResort, setSelectedResort] = useState<SkiResort | null>(null);
@@ -33,6 +78,7 @@ export default function SkiMap() {
   const [hoveredRegion, setHoveredRegion] = useState<string>('');
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const [selectedLocationCoords, setSelectedLocationCoords] = useState<[number, number] | null>(null);
+
   // Filter states
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 200]);
   const [selectedDifficulties, setSelectedDifficulties] = useState<string[]>([]);
@@ -43,6 +89,42 @@ export default function SkiMap() {
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>([]);
   const [selectedCitySize, setSelectedCitySize] = useState<string>('');
 
+  // Helper function to determine if a filter is active
+  const isFilterActive = (filterType: FilterType): boolean => {
+    switch (filterType) {
+      case 'price':
+        return priceRange[0] > 0 || priceRange[1] < 200;
+      case 'difficulty':
+        return selectedDifficulties.length > 0;
+      case 'region':
+        return selectedRegion !== '';
+      case 'distance':
+        return location !== '' && selectedLocationCoords !== null;
+      case 'amenities':
+        return selectedAmenities.length > 0;
+      case 'city':
+        return selectedCitySize !== '';
+      default:
+        return false;
+    }
+  };
+
+  // Helper function to get filter pill class names
+  const getFilterPillClasses = (filterType: FilterType): string => {
+    const baseClasses = "px-4 py-1 text-gray-800 rounded-full shadow transition-colors flex items-center gap-1 mt-1 ml-1";
+    const isActive = isFilterActive(filterType);
+    const isSelected = activeFilter === filterType;
+    
+    if (isActive && isSelected) {
+      return `${baseClasses} bg-blue-500 ring-2 ring-blue-500 text-white`;
+    } else if (isActive) {
+      return `${baseClasses} bg-blue-500 hover:bg-blue-100 text-white`;
+    } else if (isSelected) {
+      return `${baseClasses} bg-white ring-2 ring-blue-500 hover:bg-gray-100`;
+    } else {
+      return `${baseClasses} bg-white hover:bg-gray-100`;
+    }
+  };
   useEffect(() => {
     const resortsRef = ref(database, 'resorts');
     onValue(resortsRef, (snapshot) => {
@@ -53,33 +135,31 @@ export default function SkiMap() {
     });
   }, []);
 
-  // Update map highlighting when region changes or hover state changes
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
+// Update the useEffect hook that handles map zooming
+useEffect(() => {
+  if (!mapRef.current) return;
+  
+  const shouldZoomToRegion = selectedRegion && 
+    REGION_COORDINATES[selectedRegion as keyof typeof REGION_COORDINATES] && 
+    !activeFilter;  // Only zoom when filter menu is closed
 
-    const activeRegion = hoveredRegion || selectedRegion;
-
-    // Update the fill layer
-    if (map.getLayer('region-states-fill')) {
-      map.setPaintProperty('region-states-fill', 'fill-opacity', [
-        'case',
-        ['==', ['get', 'REGION'], activeRegion],
-        0.2,
-        0
-      ]);
-    }
-
-    // Update the outline layer
-    if (map.getLayer('region-states-outline')) {
-      map.setPaintProperty('region-states-outline', 'line-width', [
-        'case',
-        ['==', ['get', 'REGION'], activeRegion],
-        1,
-        0
-      ]);
-    }
-  }, [selectedRegion, hoveredRegion]);
+  if (shouldZoomToRegion) {
+    // Zoom to selected region when menu is closed
+    const regionCoords = REGION_COORDINATES[selectedRegion as keyof typeof REGION_COORDINATES];
+    mapRef.current.flyTo({
+      center: regionCoords.center,
+      duration: 1500,
+      padding: { top: 50, bottom: 50, left: 50, right: 50 }
+    });
+  } else {
+    // Keep zoomed out to show all of US
+    mapRef.current.flyTo({
+      center: [-98.5795, 39.8283], // Center of continental US
+      zoom: 3,
+      duration: 1500
+    });
+  }
+}, [activeFilter, selectedRegion]);
 
   // Cleanup map layers on unmount
   useEffect(() => {
@@ -146,6 +226,8 @@ export default function SkiMap() {
         }
       }
 
+      // Distance filter will be handled by the DistanceFilter component
+
       return true;
     });
   }, [resorts, priceRange, selectedDifficulties, selectedRegion, selectedAmenities]);
@@ -185,13 +267,50 @@ export default function SkiMap() {
     }
   };
 
+  // Handle zoom level and center position changes when region filter is selected
+  useEffect(() => {
+    if (!mapRef.current) return;
+    
+    if (activeFilter === 'region') {
+      if (selectedRegion && REGION_COORDINATES[selectedRegion as keyof typeof REGION_COORDINATES]) {
+        // If a specific region is selected, fly to that region
+        const regionCoords = REGION_COORDINATES[selectedRegion as keyof typeof REGION_COORDINATES];
+        mapRef.current.flyTo({
+          center: regionCoords.center,
+          zoom: regionCoords.zoom,
+          duration: 1500,  // Slightly longer duration for smoother transition
+          padding: { top: 50, bottom: 50, left: 50, right: 50 }  // Add padding to ensure region is fully visible
+        });
+      } else {
+        // If no region is selected, show the entire US
+        mapRef.current.flyTo({
+          center: [-98.5795, 23.8283], // Center of continental US
+          zoom: 2,
+          duration: 1500
+        });
+      }
+    }
+  }, [activeFilter, selectedRegion]);
+
+  const handleMapClick = (event: mapboxgl.MapLayerMouseEvent) => {
+    // Prevent closing if clicking on a marker
+    if (event.originalEvent.target instanceof HTMLElement && 
+        event.originalEvent.target.closest('.mapboxgl-marker')) {
+      return;
+    }
+    
+    setActiveFilter(null);
+    setHoveredRegion('');
+  };
+
   return (
     <div className="relative w-full h-screen">
+      {/* Filter buttons */}
       <div className="absolute top-4 left-0 right-0 z-10 mx-4">
         <div className="flex overflow-x-auto gap-2 pb-2 no-scrollbar max-w-full">
           <button 
             onClick={() => setActiveFilter('price')}
-            className={`px-4 py-1 bg-white hover:bg-gray-100 text-gray-800 rounded-full shadow transition-colors flex items-center gap-1 shrink-0 ${activeFilter === 'price' ? 'ring-2 ring-blue-500' : ''}`}
+            className={getFilterPillClasses('price')}
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24">
               <path fill="currentColor" d="M7 15h2c0 1.08 1.37 2 3 2s3-.92 3-2c0-1.1-1.04-1.5-3.24-2.03C9.64 12.44 7 11.78 7 9c0-1.79 1.47-3.31 3.5-3.82V3h3v2.18C15.53 5.69 17 7.21 17 9h-2c0-1.08-1.37-2-3-2s-3 .92-3 2c0 1.1 1.04 1.5 3.24 2.03C14.36 11.56 17 12.22 17 15c0 1.79-1.47 3.31-3.5 3.82V21h-3v-2.18C8.47 18.31 7 16.79 7 15" />
@@ -200,7 +319,7 @@ export default function SkiMap() {
           </button>
           <button 
             onClick={() => setActiveFilter('difficulty')}
-            className={`px-4 py-1 bg-white hover:bg-gray-100 text-gray-800 rounded-full shadow transition-colors flex items-center gap-1 ${activeFilter === 'difficulty' ? 'ring-2 ring-blue-500' : ''}`}
+            className={getFilterPillClasses('difficulty')}
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
               <path fill="currentColor" d="M1 21L12 2l11 19zm3.45-2h15.1L12 6zM12 18q.425 0 .713-.288T13 17t-.288-.712T12 16t-.712.288T11 17t.288.713T12 18m-1-3h2v-5h-2zm1-2.5"/>
@@ -209,7 +328,7 @@ export default function SkiMap() {
           </button>
           <button 
             onClick={() => setActiveFilter('region')}
-            className={`px-4 py-1 bg-white hover:bg-gray-100 text-gray-800 rounded-full shadow transition-colors flex items-center gap-1 ${activeFilter === 'region' ? 'ring-2 ring-blue-500' : ''}`}
+            className={getFilterPillClasses('region')}
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
               <path fill="currentColor" d="m15 21l-6-2.1l-6 2.325V5.05L9 3l6 2.1l6-2.325V18.95zm-1-2.45V6.85l-4-1.4v11.7zm2 0l3-1V5.7l-3 1.15zM5 18.3l3-1.15V5.45l-3 1zM16 6.85v11.7zm-8-1.4v11.7z"/>
@@ -218,7 +337,7 @@ export default function SkiMap() {
           </button>
           <button 
             onClick={() => setActiveFilter('distance')}
-            className={`px-4 py-1 bg-white hover:bg-gray-100 text-gray-800 rounded-full shadow transition-colors flex items-center gap-1 ${activeFilter === 'distance' ? 'ring-2 ring-blue-500' : ''}`}
+            className={getFilterPillClasses('distance')}
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
               <path fill="currentColor" d="m6.343 14.728l-2.828 2.829l3.535 3.535L20.485 7.657L16.95 4.121l-2.121 2.122l1.414 1.414l-1.414 1.414l-1.415-1.414l-2.121 2.121l2.121 2.122L12 13.314l-2.12-2.121l-2.122 2.12l1.415 1.415l-1.415 1.414z"/>
@@ -227,7 +346,7 @@ export default function SkiMap() {
           </button>
           <button 
             onClick={() => setActiveFilter('amenities')}
-            className={`px-4 py-1 bg-white hover:bg-gray-100 text-gray-800 rounded-full shadow transition-colors flex items-center gap-1 ${activeFilter === 'amenities' ? 'ring-2 ring-blue-500' : ''}`}
+            className={getFilterPillClasses('amenities')}
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
               <path fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" stroke="currentColor" d="M7.5 11.5v3M6 13h3m3-4.653c2.005 0 3.7-1.888 5.786-1.212c2.264.733 3.82 3.413 3.708 9.492c-.022 1.224-.336 2.578-1.546 3.106c-2.797 1.221-4.397-2.328-7-2.328h-1.897c-2.605 0-4.213 3.545-6.998 2.328c-1.21-.528-1.525-1.882-1.547-3.107c-.113-6.078 1.444-8.758 3.708-9.491C8.299 6.459 9.994 8.347 12 8.347m0-4.565v4.342M14.874 13h3"/>
@@ -236,7 +355,7 @@ export default function SkiMap() {
           </button>
           <button 
             onClick={() => setActiveFilter('city')}
-            className={`px-4 py-1 bg-white hover:bg-gray-100 text-gray-800 rounded-full shadow transition-colors flex items-center gap-1 ${activeFilter === 'city' ? 'ring-2 ring-blue-500' : ''}`}
+            className={getFilterPillClasses('city')}
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
               <g fill="none">
@@ -255,7 +374,10 @@ export default function SkiMap() {
           <h2 className="text-xl font-semibold">
             {activeFilter ? activeFilter.charAt(0).toUpperCase() + activeFilter.slice(1) : ''} Filter
           </h2>
-          <button onClick={() => setActiveFilter(null)} className="p-2 hover:bg-gray-100 rounded-full">
+          <button onClick={() => {
+            setActiveFilter(null);
+            setHoveredRegion('');
+          }} className="p-2 hover:bg-gray-100 rounded-full">
             <X className="w-6 h-6" />
           </button>
         </div>
@@ -265,62 +387,125 @@ export default function SkiMap() {
       </div>
       
       <Map
-  initialViewState={{
+        initialViewState={{
           longitude: -100,
           latitude: 40,
-          zoom: 3.5
+          zoom: 3,
         }}
-  mapboxAccessToken={MAPBOX_TOKEN}
-  style={{ width: '100%', height: '100%' }}
-  mapStyle="mapbox://styles/mapbox/outdoors-v12"
-  reuseMaps
->
-  {/* First, render all resort markers */}
-  {filteredResorts.map((resort, index) => (
-    resort.latitude && resort.longitude ? (
-      <Marker
-        key={index}
-        latitude={Number(resort.latitude)}
-        longitude={Number(resort.longitude)}
-        onClick={e => {
-          e.originalEvent.stopPropagation();
-          setSelectedResort(resort);
+        mapboxAccessToken={MAPBOX_TOKEN}
+        style={{ width: '100%', height: '100%' }}
+        mapStyle="mapbox://styles/mapbox/outdoors-v12"
+        reuseMaps
+        onClick={handleMapClick}
+        onLoad={async (event: { target: mapboxgl.Map }) => {
+          const map = event.target;
+          mapRef.current = map;
+
+          try {
+            if (!map.getSource('states')) {
+              const response = await fetch(statesData);
+              const geoJsonData = await response.json();
+
+              map.addSource('states', {
+                type: 'geojson',
+                data: geoJsonData
+              });
+
+              // Add fill layer
+              map.addLayer({
+                id: 'region-states-fill',
+                type: 'fill',
+                source: 'states',
+                layout: {},
+                paint: {
+                  'fill-color': [
+                    'match',
+                    ['get', 'REGION'],
+                    'East', REGION_COLORS.East,
+                    'West', REGION_COLORS.West,
+                    'Rocky', REGION_COLORS.Rocky,
+                    'Central', REGION_COLORS.Central,
+                    '#000000'
+                  ],
+                  'fill-opacity': [
+                    'case',
+                    ['==', ['get', 'REGION'], ''],
+                    0,
+                    0.2
+                  ]
+                }
+              });
+
+              // Add outline layer
+              map.addLayer({
+                id: 'region-states-outline',
+                type: 'line',
+                source: 'states',
+                layout: {},
+                paint: {
+                  'line-color': [
+                    'match',
+                    ['get', 'REGION'],
+                    'East', REGION_COLORS.East,
+                    'West', REGION_COLORS.West,
+                    'Rocky', REGION_COLORS.Rocky,
+                    'Central', REGION_COLORS.Central,
+                    '#000000'
+                  ],
+                  'line-width': [
+                    'case',
+                    ['==', ['get', 'REGION'], ''],
+                    0,
+                    1
+                  ]
+                }
+              });
+            }
+          } catch (error) {
+            console.error('Error loading GeoJSON:', error);
+          }
         }}
       >
-        <MapPin className="text-blue-600 hover:text-blue-800 cursor-pointer" />
-      </Marker>
-    ) : null
-  ))}
+        {/* Resort markers */}
+        {filteredResorts.map((resort, index) => (
+          resort.latitude && resort.longitude ? (
+            <Marker
+              key={index}
+              latitude={Number(resort.latitude)}
+              longitude={Number(resort.longitude)}
+              onClick={e => {
+                e.originalEvent.stopPropagation();
+                setSelectedResort(resort);
+              }}
+            >
+              <MapPin className="text-blue-600 hover:text-blue-800 cursor-pointer" />
+            </Marker>
+          ) : null
+        ))}
 
-  {/* Then, render the selected location marker */}
-  {selectedLocationCoords && (
-    <Marker
-      latitude={selectedLocationCoords[1]}
-      longitude={selectedLocationCoords[0]}
-    >
-      <svg 
-        xmlns="http://www.w3.org/2000/svg" 
-        width="24" 
-        height="24" 
-        viewBox="0 0 24 24"
-        style={{ transform: 'translate(-12px, -24px)' }}
-      >
-        <path 
-          fill="#f00" 
-          d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2z" 
-        />
-      </svg>
-    </Marker>
-  )}
-
-  {/* Finally, render the resort popup if there's a selected resort */}
-  {selectedResort && (
-    <ResortPopup 
-      resort={selectedResort}
-      onClose={() => setSelectedResort(null)}
-    />
-  )}
-</Map>
+        {/* Selected location marker */}
+        {selectedLocationCoords && (
+          <Marker
+            latitude={selectedLocationCoords[1]}
+            longitude={selectedLocationCoords[0]}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+              <g fill="#f00" fillRule="evenodd" clipRule="evenodd">
+                <path d="M16.272 10.272a4 4 0 1 1-8 0a4 4 0 0 1 8 0m-2 0a2 2 0 1 1-4 0a2 2 0 0 1 4 0" />
+                <path d="M5.794 16.518a9 9 0 1 1 12.724-.312l-6.206 6.518zm11.276-1.691l-4.827 5.07l-5.07-4.827a7 7 0 1 1 9.897-.243" />
+              </g>
+            </svg>
+          </Marker>
+        )}
+        
+        {/* Resort popup */}
+        {selectedResort && (
+          <ResortPopup 
+            resort={selectedResort}
+            onClose={() => setSelectedResort(null)}
+          />
+        )}
+      </Map>
     </div>
   );
 }

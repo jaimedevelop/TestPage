@@ -32,12 +32,18 @@ export default function DistanceFilter({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleSuggestionClick = (suggestion: any) => {
-    setLocation(suggestion.place_name);
-    setQuery(suggestion.place_name);
-    setSelectedCoordinates(suggestion.center);
-    setShowSuggestions(false);
-  };
+  const handleSuggestionClick = (suggestion: MapboxFeature) => {
+  setLocation(suggestion.place_name);
+  setQuery(suggestion.place_name);
+  setShowSuggestions(false);
+  // Get coordinates from the suggestion
+  if (suggestion.geometry && suggestion.geometry.coordinates) {
+    setSelectedCoordinates([
+      suggestion.geometry.coordinates[0],
+      suggestion.geometry.coordinates[1]
+    ]);
+  }
+};
 
   return (
     <div className="p-6 space-y-4">
