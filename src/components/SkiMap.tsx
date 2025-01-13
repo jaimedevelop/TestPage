@@ -12,6 +12,7 @@ import DistanceFilter from './filters/DistanceFilter';
 import AmenitiesFilter from './filters/AmenitiesFilter';
 import CityFilter from './filters/CityFilter';
 import mapboxgl from 'mapbox-gl';
+import 'mapbox-gl/dist/mapbox-gl.css'; //JUST ADDED THIS
 import statesData from '../data/states.geojson?url';
 
 const MAPBOX_TOKEN = 'pk.eyJ1Ijoiam9hcXVpbmdmMjEiLCJhIjoiY2x1dnZ1ZGFrMDduZTJrbWp6bHExbzNsYiJ9.ZOEuIV9R0ks2I5bYq40HZQ';
@@ -31,7 +32,7 @@ export default function SkiMap() {
   const [activeFilter, setActiveFilter] = useState<FilterType>(null);
   const [hoveredRegion, setHoveredRegion] = useState<string>('');
   const mapRef = useRef<mapboxgl.Map | null>(null);
-  
+  const [selectedLocationCoords, setSelectedLocationCoords] = useState<[number, number] | null>(null);
   // Filter states
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 200]);
   const [selectedDifficulties, setSelectedDifficulties] = useState<string[]>([]);
@@ -172,6 +173,7 @@ export default function SkiMap() {
             setLocation={setLocation}
             maxDistance={maxDistance}
             setMaxDistance={setMaxDistance}
+            setSelectedCoordinates={setSelectedLocationCoords}
           />
         );
       case 'amenities':
@@ -263,103 +265,62 @@ export default function SkiMap() {
       </div>
       
       <Map
-        initialViewState={{
+  initialViewState={{
           longitude: -100,
           latitude: 40,
           zoom: 3.5
         }}
-        style={{ width: '100%', height: '100%' }}
-        mapStyle="mapbox://styles/mapbox/outdoors-v12"
-        mapboxAccessToken={MAPBOX_TOKEN}
-        onLoad={async (event: { target: mapboxgl.Map }) => {
-          const map = event.target;
-          mapRef.current = map;
-
-          try {
-            if (!map.getSource('states')) {
-              const response = await fetch(statesData);
-              const geoJsonData = await response.json();
-
-              map.addSource('states', {
-                type: 'geojson',
-                data: geoJsonData
-              });
-
-              // Add fill layer below the marker layer
-              map.addLayer({
-                id: 'region-states-fill',
-                type: 'fill',
-                source: 'states',
-                paint: {
-                  'fill-color': [
-                    'match',
-                    ['get', 'REGION'],
-                    'East', REGION_COLORS.East,
-                    'West', REGION_COLORS.West,
-                    'Rocky', REGION_COLORS.Rocky,
-                    'Central', REGION_COLORS.Central,
-                    '#000000'
-                  ],
-                  'fill-opacity': [
-                    'case',
-                    ['==', ['get', 'REGION'], hoveredRegion || selectedRegion],
-                    0.2,
-                    0
-                  ]
-                }
-              }, 'poi-label'); // Insert the layer below labels to keep markers visible
-
-              map.addLayer({
-                id: 'region-states-outline',
-                type: 'line',
-                source: 'states',
-                paint: {
-                  'line-color': [
-                    'match',
-                    ['get', 'REGION'],
-                    'East', REGION_COLORS.East,
-                    'West', REGION_COLORS.West,
-                    'Rocky', REGION_COLORS.Rocky,
-                    'Central', REGION_COLORS.Central,
-                    '#000000'
-                  ],
-                  'line-width': [
-                    'case',
-                    ['==', ['get', 'REGION'], hoveredRegion || selectedRegion],
-                    1,
-                    0
-                  ]
-                }
-              }, 'poi-label'); // Insert the layer below labels to keep markers visible
-            }
-          } catch (error) {
-            console.error('Error loading GeoJSON:', error);
-          }
+  mapboxAccessToken={MAPBOX_TOKEN}
+  style={{ width: '100%', height: '100%' }}
+  mapStyle="mapbox://styles/mapbox/outdoors-v12"
+  reuseMaps
+>
+  {/* First, render all resort markers */}
+  {filteredResorts.map((resort, index) => (
+    resort.latitude && resort.longitude ? (
+      <Marker
+        key={index}
+        latitude={Number(resort.latitude)}
+        longitude={Number(resort.longitude)}
+        onClick={e => {
+          e.originalEvent.stopPropagation();
+          setSelectedResort(resort);
         }}
       >
-        {filteredResorts.map((resort, index) => (
-          resort.latitude && resort.longitude ? (
-            <Marker
-              key={index}
-              latitude={Number(resort.latitude)}
-              longitude={Number(resort.longitude)}
-              onClick={e => {
-                e.originalEvent.stopPropagation();
-                setSelectedResort(resort);
-              }}
-            >
-              <MapPin className="text-blue-600 hover:text-blue-800 cursor-pointer" />
-            </Marker>
-          ) : null
-        ))}
-        
-        {selectedResort && (
-          <ResortPopup 
-            resort={selectedResort}
-            onClose={() => setSelectedResort(null)}
-          />
-        )}
-      </Map>
+        <MapPin className="text-blue-600 hover:text-blue-800 cursor-pointer" />
+      </Marker>
+    ) : null
+  ))}
+
+  {/* Then, render the selected location marker */}
+  {selectedLocationCoords && (
+    <Marker
+      latitude={selectedLocationCoords[1]}
+      longitude={selectedLocationCoords[0]}
+    >
+      <svg 
+        xmlns="http://www.w3.org/2000/svg" 
+        width="24" 
+        height="24" 
+        viewBox="0 0 24 24"
+        style={{ transform: 'translate(-12px, -24px)' }}
+      >
+        <path 
+          fill="#f00" 
+          d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2z" 
+        />
+      </svg>
+    </Marker>
+  )}
+
+  {/* Finally, render the resort popup if there's a selected resort */}
+  {selectedResort && (
+    <ResortPopup 
+      resort={selectedResort}
+      onClose={() => setSelectedResort(null)}
+    />
+  )}
+</Map>
     </div>
   );
 }

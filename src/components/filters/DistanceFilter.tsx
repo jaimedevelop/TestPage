@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useState, useRef } from 'react';
+import { useMapboxGeocoding } from '../hooks/useMapboxGeocoding';
 
 interface DistanceFilterProps {
   location: string;
@@ -13,28 +14,84 @@ export default function DistanceFilter({
   maxDistance,
   setMaxDistance
 }: DistanceFilterProps) {
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const { query, setQuery, suggestions, loading, error } = useMapboxGeocoding(location);
+  const suggestionRef = useRef(null);
+
+  // Handle clicking outside suggestions
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (suggestionRef.current && !suggestionRef.current.contains(event.target)) {
+        setShowSuggestions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSuggestionClick = (suggestion) => {
+    setLocation(suggestion.place_name);
+    setQuery(suggestion.place_name);
+    setShowSuggestions(false);
+  };
+
   return (
     <div className="p-6 space-y-4">
       <h3 className="text-lg font-semibold">Distance Filter</h3>
-      <div>
+      <div className="relative" ref={suggestionRef}>
         <label className="block text-sm font-medium text-gray-700">Your Location</label>
         <input
           type="text"
-          value={location}
-          onChange={(e) => setLocation(e.target.value)}
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setShowSuggestions(true);
+          }}
+          onFocus={() => setShowSuggestions(true)}
           placeholder="Enter city or zip code"
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2"
+          className="mt-1 block w-full rounded-md border border-gray-300 shadow-sm p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
         />
+        
+        {/* Loading indicator */}
+        {loading && (
+          <div className="absolute right-2 top-9">
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
+          </div>
+        )}
+
+        {/* Error message */}
+        {error && (
+          <p className="mt-1 text-sm text-red-600">{error}</p>
+        )}
+
+        {/* Suggestions dropdown */}
+        {showSuggestions && suggestions.length > 0 && (
+          <div className="absolute z-10 mt-1 w-full bg-white rounded-md shadow-lg border border-gray-200">
+            {suggestions.map((suggestion) => (
+              <button
+                key={suggestion.id}
+                className="w-full text-left px-4 py-2 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none text-gray-600"
+                onClick={() => handleSuggestionClick(suggestion)}
+              >
+                {suggestion.place_name}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
+
       <div>
-        <label className="block text-sm font-medium text-gray-700">Maximum Distance: {maxDistance} miles</label>
+        <label className="block text-sm font-medium text-gray-700">
+          Maximum Distance: {maxDistance} miles
+        </label>
         <input
           type="range"
           min="0"
           max="500"
           value={maxDistance}
           onChange={(e) => setMaxDistance(Number(e.target.value))}
-          className="w-full"
+          className="w-full mt-2"
         />
       </div>
     </div>
